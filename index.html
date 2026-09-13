@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictive Delivery Modeling Dashboard</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+
+    <style>
+        :root {
+            /* NEW THEME: Modern Indigo & Rose */
+            --primary: #4f46e5;       /* Indigo 600 */
+            --primary-dark: #312e81;  /* Indigo 800 */
+            --secondary: #ec4899;     /* Rose 500 */
+            --secondary-light: #fbcfe8; /* Rose 100 */
+            --accent: #10b981;        /* Emerald 500 */
+            --warning: #f59e0b;        /* Amber 500 */
+            --bg-light: #f3f4f6;      /* Gray 100 */
+            --text-dark: #1f2937;     /* Gray 800 */
+            --sidebar-width: 260px;
+            --header-height: 70px;
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Animations --- */
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Navigation --- */
+        .navbar {
+            height: var(--header-height);
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 0 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary) !important;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-brand i { color: var(--secondary); margin-right: 10px; }
+        .nav-link { font-weight: 500; color: var(--text-dark) !important; margin: 0 10px; transition: color 0.3s; }
+        .nav-link:hover, .nav-link.active { color: var(--primary) !important; }
+        .btn-auth { background-color: var(--primary); color: white; border-radius: 50px; padding: 8px 24px; transition: background 0.3s; }
+        .btn-auth:hover { background-color: var(--primary-dark); color: white; }
+
+        /* --- Views Management --- */
+        .view-section { display: none; min-height: calc(100vh - var(--header-height)); padding-top: 2rem; }
+        .view-section.active { display: block; }
+
+        /* --- Hero Section (Updated Gradient) --- */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 120px 0 80px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80') center/cover;
+            opacity: 0.15;
+        }
+        .hero-content { position: relative; z-index: 1; max-width: 600px; }
+        .feature-card {
+            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 2rem; transition: var(--transition); height: 100%;
+            border-bottom: 4px solid transparent;
+        }
+        .feature-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); border-bottom-color: var(--secondary); }
+
+        /* --- Auth Forms --- */
+        .auth-container { max-width: 450px; margin: 4rem auto; background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .form-control:focus, .form-select:focus { border-color: var(--secondary); box-shadow: 0 0 0 0.2rem rgba(236, 72, 153, 0.25); }
+
+        /* --- Dashboard Layout --- */
+        .dashboard-layout { display: flex; height: calc(100vh - var(--header-height)); }
+        .sidebar {
+            width: var(--sidebar-width);
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            display: flex; flex-direction: column;
+            position: fixed; height: 100%; z-index: 900;
+            overflow-y: auto;
+        }
+        .main-content {
+            flex: 1; margin-left: var(--sidebar-width);
+            padding: 2rem; background-color: #f8fafc; /* Slightly lighter than body bg */
+            overflow-y: auto;
+        }
+        
+        .sidebar-header { padding: 1.5rem; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--primary); }
+        .nav-item { padding: 12px 24px; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; gap: 12px; transition: var(--transition); cursor: pointer; border-left: 3px solid transparent; }
+        .nav-item:hover, .nav-item.active { background-color: var(--secondary-light); color: var(--primary-dark); border-left-color: var(--secondary); font-weight: 600; }
+        .nav-section { font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; padding: 20px 24px 10px; font-weight: 700; letter-spacing: 0.05em; }
+
+        /* --- Dashboard Components (Updated Accents) --- */
+        .stat-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; }
+        .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--primary); }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+        
+        .card-custom { background: white; border: none; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
+        .card-header-custom { background: transparent; border-bottom: 1px solid #f1f5f9; padding: 1.25rem; font-weight: 600; color: var(--text-dark); display: flex; justify-content: space-between; align-items: center; }
+
+        /* --- Sliders & Inputs (Updated Accent) --- */
+        input[type=range] { width: 100%; cursor: pointer; accent-color: var(--secondary); }
+        .prediction-panel { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; border-radius: 12px; padding: 2rem; text-align: center; }
+        .metric-box { background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center; }
+
+        /* --- Live Map Placeholder --- */
+        .live-map { 
+            background-color: #e5e7eb; 
+            height: 400px; 
+            border-radius: 12px; 
+            position: relative; 
+            overflow: hidden;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .map-dot { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; animation: pulse 2s infinite; }
+        .map-dot.active { background-color: var(--secondary); }
+        .map-dot.delayed { background-color: var(--warning); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); } }
+
+        /* --- Settings Nav --- */
+        .settings-sidebar { width: 250px; border-right: 1px solid #e2e8f0; padding-right: 20px; }
+        .settings-link { display: block; padding: 10px 15px; color: var(--text-dark); text-decoration: none; border-radius: 6px; margin-bottom: 5px; transition: var(--transition); cursor: pointer; }
+        .settings-link:hover, .settings-link.active { background-color: var(--secondary-light); color: var(--primary-dark); font-weight: 600; }
+
+        /* --- Responsive --- */
+        @media (max-width: 991px) {
+            .sidebar { transform: translateX(-100%); position: fixed; width: 260px; box-shadow: 5px 0 15px rgba(0,0,0,0.1); transition: transform 0.3s ease; }
+            .sidebar.show { transform: translateX(0); }
+            .main-content { margin-left: 0 !important; }
+            .settings-sidebar { border-right: none; border-bottom: 1px solid #e2e8f0; width: 100%; margin-bottom: 20px; padding-right: 0; overflow-x: auto; display: flex; gap: 10px; padding-bottom: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ================= NAVBAR ================= -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#" onclick="router('home')">
+                <i class="fas fa-truck-fast"></i>
+                <span style="margin-left: 10px;">Predictive Delivery</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="router('home')">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="router('product')">Product</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="router('solutions')">Solutions</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="router('company')">Company</a></li>
+                    <li class="nav-item ms-3 d-flex gap-2 auth-links">
+                        <button class="btn btn-outline-primary btn-sm px-4" onclick="router('auth', 'login')">Login</button>
+                        <button class="btn btn-auth btn-sm px-4" onclick="router('auth', 'register')">Register</button>
+                    </li>
+                    <li class="nav-item ms-3 d-none dashboard-links">
+                        <div class="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-circle me-1"></i> <span id="nav-username">User</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
+                                <li><a class="dropdown-item" href="#" onclick="router('settings')">Settings</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="logout()">Logout</a></li>
+                            </ul>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ================= VIEWS ================= -->
+
+    <!-- 1. HOME PAGE -->
+    <section id="view-home" class="view-section active fade-in">
+        <div class="hero">
+            <div class="container hero-content">
+                <h1 class="display-4 fw-bold mb-4">Predict Delivery Times with Data-Driven Intelligence</h1>
+                <p class="lead mb-5 opacity-75">Leverage advanced regression analytics to forecast delivery windows, optimize routes, and mitigate delays caused by traffic and weather conditions.</p>
+                <div class="d-flex gap-3">
+                    <button class="btn btn-light btn-lg px-5 fw-bold text-primary" onclick="router('auth', 'register')">Get Started</button>
+                    <button class="btn btn-outline-light btn-lg px-5" onclick="router('auth', 'login')">Explore Dashboard</button>
+                </div>
+            </div>
+        </div>
+        <div class="container pb-5">
+            <div class="row g-4 mt-5">
+                <div class="col-md-4 col-lg-2-4">
+                    <div class="feature-card text-center">
+                        <i class="fas fa-satellite-dish fa-2x text-primary mb-3"></i>
+                        <h5>Real-Time Data</h5>
+                        <p class="small text-muted">Ingest live transit data instantly.</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-lg-2-4">
+                    <div class="feature-card text-center">
+                        <i class="fas fa-stopwatch fa-2x text-success mb-3"></i>
+                        <h5>Delivery Prediction</h5>
+                        <p class="small text-muted">Accurate ETAs using ML models.</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-lg-2-4">
+                    <div class="feature-card text-center">
+                        <i class="fas fa-car-crash fa-2x text-warning mb-3"></i>
+                        <h5>Traffic Analysis</h5>
+                        <p class="small text-muted">Visualize congestion impacts.</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-lg-2-4">
+                    <div class="feature-card text-center">
+                        <i class="fas fa-cloud-sun-rain fa-2x text-info mb-3"></i>
+                        <h5>Weather Analysis</h5>
+                        <p class="small text-muted">Adjust for meteorological factors.</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-lg-2-4">
+                    <div class="feature-card text-center">
+                        <i class="fas fa-chart-line fa-2x text-secondary mb-3"></i>
+                        <h5>Smart Analytics</h5>
+                        <p class="small text-muted">Deep insights from residuals.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. AUTH PAGE (Login/Register) -->
+    <section id="view-auth" class="view-section fade-in">
+        <div class="auth-container">
+            <ul class="nav nav-tabs nav-fill mb-4" id="authTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link active" id="tab-login" data-bs-toggle="tab" data-bs-target="#pane-login" type="button">Login</button></li>
+                <li class="nav-item"><button class="nav-link" id="tab-register" data-bs-toggle="tab" data-bs-target="#pane-register" type="button">Register</button></li>
+            </ul>
+            <div class="tab-content">
+                <!-- Login Form -->
+                <div class="tab-pane fade show active" id="pane-login">
+                    <h3 class="text-center fw-bold mb-4 text-primary">Welcome Back</h3>
+                    <form id="loginForm" onsubmit="handleLogin(event)">
+                        <div class="mb-3"><label class="form-label">Email / Username</label><input type="text" class="form-control" placeholder="admin@example.com" required></div>
+                        <div class="mb-3"><label class="form-label">Password</label><input type="password" class="form-control" placeholder="•••••••••" required></div>
+                        <div class="mb-3 form-check"><input type="checkbox" class="form-check-input" id="rememberMe"><label class="form-check-label" for="rememberMe">Remember Me</label></div>
+                        <button type="submit" class="btn btn-auth w-100 py-2 mt-2">Login</button>
+                    </form>
+                    <div class="text-center mt-3">
+                        <a href="#" class="small text-muted text-decoration-none">Forgot Password?</a>
+                    </div>
+                    <div class="text-center mt-3">
+                        <span class="small text-muted">Don't have an account? </span>
+                        <a href="#" onclick="document.getElementById('tab-register').click()" class="small fw-bold text-primary">Register</a>
+                    </div>
+                </div>
+                <!-- Register Form -->
+                <div class="tab-pane fade" id="pane-register">
+                    <h3 class="text-center fw-bold mb-4 text-primary">Create Account</h3>
+                    <form id="registerForm" onsubmit="handleRegister(event)">
+                        <div class="row">
+                            <div class="col-6 mb-3"><label class="form-label">Full Name</label><input type="text" class="form-control" required></div>
+                            <div class="col-6 mb-3"><label class="form-label">Username</label><input type="text" class="form-control" required></div>
+                        </div>
+                        <div class="mb-3"><label class="form-label">Email Address</label><input type="email" class="form-control" required></div>
+                        <div class="row">
+                            <div class="col-6 mb-3"><label class="form-label">Password</label><input type="password" class="form-control" required></div>
+                            <div class="col-6 mb-3"><label class="form-label">Confirm Password</label><input type="password" class="form-control" required></div>
+                        </div>
+                        <div class="mb-3 form-check"><input type="checkbox" class="form-check-input" id="terms" required><label class="form-check-label" for="terms">I agree to the Terms & Conditions</label></div>
+                        <button type="submit" class="btn btn-auth w-100 py-2 mt-2">Create Account</button>
+                    </form>
+                    <div class="text-center mt-3">
+                        <span class="small text-muted">Already have an account? </span>
+                        <a href="#" onclick="document.getElementById('tab-login').click()" class="small fw-bold text-primary">Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. PRODUCT PAGE -->
+    <section id="view-product" class="view-section fade-in">
+        <div class="container">
+            <div class="text-center py-5">
+                <h2 class="fw-bold text-primary">Predictive Delivery Platform</h2>
+                <p class="text-muted lead">Comprehensive tools for modern logistics.</p>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card-custom h-100">
+                        <div class="card-body p-5">
+                            <div class="d-flex align-items-start gap-4">
+                                <div class="stat-icon bg-primary bg-opacity-10 text-primary"><i class="fas fa-chart-area"></i></div>
+                                <div>
+                                    <h4>Predictive Dashboard</h4>
+                                    <p class="text-muted small">Central hub for monitoring real-time metrics and KPIs.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card-custom h-100">
+                        <div class="card-body p-5">
+                            <div class="d-flex align-items-start gap-4">
+                                <div class="stat-icon bg-success bg-opacity-10 text-success"><i class="fas fa-map-marked-alt"></i></div>
+                                <div>
+                                    <h4>Live Tracking</h4>
+                                    <p class="text-muted small">Monitor active fleets with GPS visualization.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card-custom h-100">
+                        <div class="card-body p-5">
+                            <div class="d-flex align-items-start gap-4">
+                                <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="fas fa-clock"></i></div>
+                                <div>
+                                    <h4>Time Prediction</h4>
+                                    <p class="text-muted small">AI-powered ETA estimation with confidence intervals.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card-custom h-100">
+                        <div class="card-body p-5">
+                            <div class="d-flex align-items-start gap-4">
+                                <div class="stat-icon bg-danger bg-opacity-10 text-danger"><i class="fas fa-chart-bar"></i></div>
+                                <div>
+                                    <h4>Regression Analytics</h4>
+                                    <p class="text-muted small">Deep dive into traffic and weather impact.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. SOLUTIONS PAGE -->
+    <section id="view-solutions" class="view-section fade-in">
+        <div class="container py-5">
+            <h2 class="fw-bold text-center mb-5">Enterprise Solutions</h2>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card-custom h-100 text-center p-4">
+                        <i class="fas fa-route fa-3x text-primary mb-3"></i>
+                        <h4>Route Optimization</h4>
+                        <p class="small text-muted">Dynamic pathfinding based on predictive delay data.</p>
+                        <button class="btn btn-sm btn-outline-primary mt-3">Learn More</button>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card-custom h-100 text-center p-4">
+                        <i class="fas fa-tachometer-alt fa-3x text-warning mb-3"></i>
+                        <h4>Delay Detection</h4>
+                        <p class="small text-muted">Early warning systems for at-risk shipments.</p>
+                        <button class="btn btn-sm btn-outline-primary mt-3">Learn More</button>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card-custom h-100 text-center p-4">
+                        <i class="fas fa-file-invoice-dollar fa-3x text-success mb-3"></i>
+                        <h4>BI Reports</h4>
+                        <p class="small text-muted">Automated business intelligence reporting.</p>
+                        <button class="btn btn-sm btn-outline-primary mt-3">Learn More</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. COMPANY PAGE -->
+    <section id="view-company" class="view-section fade-in">
+        <div class="container py-5">
+            <div class="row">
+                <div class="col-md-8">
+                    <h2 class="fw-bold mb-4">About Us</h2>
+                    <p>We are a team of data scientists and logistics experts dedicated to revolutionizing supply chain transparency through advanced predictive modeling.</p>
+                    <h5 class="fw-bold mt-4">Our Mission</h5>
+                    <p>To eliminate uncertainty in delivery operations through real-time artificial intelligence.</p>
+                    <h5 class="fw-bold mt-4">Why Choose Us</h5>
+                    <ul>
+                        <li>99.5% Prediction Accuracy</li>
+                        <li>Global Data Coverage</li>
+                        <li>Seamless API Integration</li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <div class="card-custom p-4">
+                        <h5 class="fw-bold">Quick Links</h5>
+                        <ul class="list-unstyled mt-3">
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">Careers</a></li>
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">Contact Us</a></li>
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">FAQ</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. MAIN DASHBOARD (Protected) -->
+    <section id="view-dashboard" class="view-section fade-in p-0">
+        <div class="dashboard-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="dashboardSidebar">
+                <div class="sidebar-header">
+                    <i class="fas fa-chart-pie text-primary"></i> Analytics
+                </div>
+                <div class="nav-section">Main</div>
+                <a class="nav-item active" onclick="dashRouter('overview')"><i class="fas fa-home"></i> Overview</a>
+                <a class="nav-item" onclick="dashRouter('tracking')"><i class="fas fa-map-marker-alt"></i> Live Tracking</a>
+                <a class="nav-item" onclick="dashRouter('predictions')"><i class="fas fa-magic"></i> Predictions</a>
+                <div class="nav-section">Analysis</div>
+                <a class="nav-item" onclick="dashRouter('traffic')"><i class="fas fa-car"></i> Traffic Analysis</a>
+                <a class="nav-item" onclick="dashRouter('weather')"><i class="fas fa-cloud-sun"></i> Weather Analysis</a>
+                <a class="nav-item" onclick="dashRouter('analytics')"><i class="fas fa-chart-line"></i> Analytics</a>
+                <div class="nav-section">System</div>
+                <a class="nav-item" onclick="dashRouter('reports')"><i class="fas fa-file-alt"></i> Reports</a>
+                <a class="nav-item" onclick="dashRouter('settings')"><i class="fas fa-cog"></i> User Settings</a>
+                <div class="mt-auto p-3">
+                    <a class="nav-item text-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <button class="btn btn-light d-lg-none mb-3" onclick="toggleSidebar()"><i class="fas fa-bars"></i> Menu</button>
+                
+                <!-- Sub-views -->
+                
+                <!-- 7.1 Overview -->
+                <div id="dash-overview" class="dash-view fade-in">
+                    <h3 class="fw-bold mb-4">Dashboard Overview</h3>
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-3">
+                            <div class="stat-card">
+                                <div>
+                                    <div class="text-muted small mb-1">Total Deliveries</div>
+                                    <div class="stat-value">12,450</div>
+                                </div>
+                                <div class="stat-icon bg-primary bg-opacity-10 text-primary"><i class="fas fa-box"></i></div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card">
+                                <div>
+                                    <div class="text-muted small mb-1">On-Time Rate</div>
+                                    <div class="stat-value text-success">94.2%</div>
+                                </div>
+                                <div class="stat-icon bg-success bg-opacity-10 text-success"><i class="fas fa-check-circle"></i></div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card">
+                                <div>
+                                    <div class="text-muted small mb-1">Avg Delivery Time</div>
+                                    <div class="stat-value text-warning">32m</div>
+                                </div>
+                                <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="fas fa-clock"></i></div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card">
+                                <div>
+                                    <div class="text-muted small mb-1">Delayed</div>
+                                    <div class="stat-value text-danger">142</div>
+                                </div>
+                                <div class="stat-icon bg-danger bg-opacity-10 text-danger"><i class="fas fa-exclamation-triangle"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charts Area -->
+                    <div class="row g-4">
+                        <div class="col-lg-8">
+                            <div class="card-custom h-100">
+                                <div class="card-header-custom">
+                                    <span>Delivery Performance Trends</span>
+                                    <select class="form-select form-select-sm w-auto"><option>Last 7 Days</option></select>
+                                </div>
+                                <div class="card-body">
+                                    <div id="overviewChart" style="height: 350px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="card-custom h-100">
+                                <div class="card-header-custom">Status Breakdown</div>
+                                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                                    <div id="statusChart" style="height: 300px; width: 100%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7.2 Live Tracking -->
+                <div id="dash-tracking" class="dash-view fade-in d-none">
+                    <h3 class="fw-bold mb-4">Live Delivery Tracking</h3>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card-custom p-0 overflow-hidden">
+                                <div class="live-map">
+                                    <!-- Simulated Map Grid -->
+                                    <div style="position: absolute; top: 20%; left: 30%;"><div class="map-dot active"></div></div>
+                                    <div style="position: absolute; top: 50%; left: 60%;"><div class="map-dot active"></div></div>
+                                    <div style="position: absolute; top: 70%; left: 40%;"><div class="map-dot delayed"></div></div>
+                                    <div style="position: absolute; bottom: 20px; left: 10px; background: white; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-map"></i> Live Map</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card-custom">
+                                <div class="card-header-custom">Active Deliveries</div>
+                                <div class="list-group list-group-flush">
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-bold">DLV-4092</div>
+                                            <div class="small text-muted">Driver: Mike R.</div>
+                                        </div>
+                                        <span class="badge bg-success">On Route</span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-bold">DLV-4093</div>
+                                            <div class="small text-muted">Driver: Sarah K.</div>
+                                        </div>
+                                        <span class="badge bg-warning text-dark">Delayed</span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-bold">DLV-4094</div>
+                                            <div class="small text-muted">Driver: John D.</div>
+                                        </div>
+                                        <span class="badge bg-success">On Route</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7.3 Interactive Prediction Module -->
+                <div id="dash-predictions" class="dash-view fade-in d-none">
+                    <h3 class="fw-bold mb-4">Delivery Prediction Simulator</h3>
+                    <div class="row">
+                        <div class="col-lg-4">
+                            <div class="card-custom">
+                                <div class="card-header-custom">Input Parameters</div>
+                                <div class="card-body">
+                                    <!-- Sliders -->
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1"><label class="small fw-bold">Traffic Index</label><span id="val-traffic" class="badge bg-light text-primary">50</span></div>
+                                        <input type="range" class="form-range" min="0" max="100" value="50" id="range-traffic" oninput="updatePrediction()">
+                                    </div>
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1"><label class="small fw-bold">Weather Severity</label><span id="val-weather" class="badge bg-light text-primary">20</span></div>
+                                        <input type="range" class="form-range" min="0" max="100" value="20" id="range-weather" oninput="updatePrediction()">
+                                    </div>
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1"><label class="small fw-bold">Distance (km)</label><span id="val-dist" class="badge bg-light text-primary">15</span></div>
+                                        <input type="range" class="form-range" min="1" max="100" value="15" id="range-dist" oninput="updatePrediction()">
+                                    </div>
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1"><label class="small fw-bold">Delivery Load (kg)</label><span id="val-load" class="badge bg-light text-primary">10</span></div>
+                                        <input type="range" class="form-range" min="1" max="50" value="10" id="range-load" oninput="updatePrediction()">
+                                    </div>
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1"><label class="small fw-bold">Time of Day (Hour)</label><span id="val-time" class="badge bg-light text-primary">14</span></div>
+                                        <input type="range" class="form-range" min="0" max="23" value="14" id="range-time" oninput="updatePrediction()">
+                                    </div>
+                                    
+                                    <div class="prediction-panel mt-4">
+                                        <div class="small text-white-50 mb-1">Predicted Time</div>
+                                        <h2 class="fw-bold mb-0" id="pred-result">-- min</h2>
+                                        <div class="small mt-2 opacity-75">95% Confidence Interval</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Model Metrics -->
+                            <div class="card-custom mt-3">
+                                <div class="card-header-custom">Model Performance</div>
+                                <div class="card-body">
+                                    <div class="row text-center">
+                                        <div class="col-4">
+                                            <div class="fw-bold text-primary" id="metric-r2">0.89</div>
+                                            <small class="text-muted">R² Score</small>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="fw-bold text-warning" id="metric-mae">2.4</div>
+                                            <small class="text-muted">MAE</small>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="fw-bold text-danger" id="metric-rmse">3.1</div>
+                                            <small class="text-muted">RMSE</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-lg-8">
+                            <div class="card-custom h-100">
+                                <div class="card-header-custom">
+                                    <span>Regression Analysis (Distance vs Time)</span>
+                                    <div class="small text-muted">Dynamic update based on sliders</div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="predictionChart" style="width:100%; height:500px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7.4 & 7.5 Traffic & Weather -->
+                <div id="dash-traffic" class="dash-view fade-in d-none"><h3 class="fw-bold mb-4">Traffic Impact Analysis</h3><div id="trafficChart" style="height:400px;"></div></div>
+                <div id="dash-weather" class="dash-view fade-in d-none"><h3 class="fw-bold mb-4">Weather Impact Analysis</h3><div id="weatherChart" style="height:400px;"></div></div>
+
+                <!-- 7.6 Analytics (Residuals) -->
+                <div id="dash-analytics" class="dash-view fade-in d-none">
+                    <h3 class="fw-bold mb-4">Advanced Analytics</h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card-custom">
+                                <div class="card-header-custom">Residual Plot</div>
+                                <div class="card-body"><div id="residualChart" style="height:350px;"></div></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card-custom">
+                                <div class="card-header-custom">Feature Importance</div>
+                                <div class="card-body"><div id="importanceChart" style="height:350px;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7.7 Reports -->
+                <div id="dash-reports" class="dash-view fade-in d-none">
+                    <h3 class="fw-bold mb-4">Data Reports</h3>
+                    <div class="card-custom">
+                        <div class="card-header-custom">
+                            <span>Delivery History</span>
+                            <button class="btn btn-sm btn-primary"><i class="fas fa-download"></i> Export CSV</button>
+                        </div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead><tr><th>ID</th><th>Distance</th><th>Traffic</th><th>Weather</th><th>Actual Time</th><th>Predicted Time</th></tr></thead>
+                                <tbody id="reportTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. User Settings -->
+                <div id="dash-settings" class="dash-view fade-in d-none">
+                    <h3 class="fw-bold mb-4">User Settings</h3>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="settings-sidebar">
+                                <a class="settings-link active" onclick="setSettingsTab('profile')">Profile</a>
+                                <a class="settings-link" onclick="setSettingsTab('account')">Account</a>
+                                <a class="settings-link" onclick="setSettingsTab('notifications')">Notifications</a>
+                                <a class="settings-link" onclick="setSettingsTab('preferences')">Dashboard Preferences</a>
+                                <a class="settings-link" onclick="setSettingsTab('security')">Privacy & Security</a>
+                                <a class="settings-link" onclick="setSettingsTab('appearance')">Appearance</a>
+                                <a class="settings-link" onclick="setSettingsTab('data')">Data & Reports</a>
+                                <a class="settings-link" onclick="setSettingsTab('support')">Support</a>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            
+                            <!-- Profile Settings -->
+                            <div id="set-profile" class="settings-content">
+                                <div class="card-custom">
+                                    <div class="card-header-custom">Profile Settings</div>
+                                    <div class="card-body">
+                                        <div class="text-center mb-4">
+                                            <img src="https://picsum.photos/seed/user/100/100" class="rounded-circle mb-2" width="80" height="80">
+                                            <div><button class="btn btn-sm btn-outline-primary">Change Photo</button></div>
+                                        </div>
+                                        <form>
+                                            <div class="row g-3">
+                                                <div class="col-md-6"><label class="form-label">Full Name</label><input type="text" class="form-control" value="John Doe"></div>
+                                                <div class="col-md-6"><label class="form-label">Username</label><input type="text" class="form-control" value="johndoe" disabled></div>
+                                                <div class="col-12"><label class="form-label">Email</label><input type="email" class="form-control" value="john@example.com"></div>
+                                            </div>
+                                            <div class="mt-4 text-end">
+                                                <button class="btn btn-secondary">Cancel</button>
+                                                <button class="btn btn-primary">Save Changes</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Appearance -->
+                            <div id="set-appearance" class="settings-content d-none">
+                                <div class="card-custom">
+                                    <div class="card-header-custom">Appearance</div>
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div>
+                                                <h5 class="fw-bold">Dark Mode</h5>
+                                                <p class="small text-muted">Switch between light and dark themes.</p>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="darkModeToggle" onchange="toggleTheme()">
+                                            </div>
+                                        </div>
+                                        <hr>
+                                        <div class="mb-3">
+                                            <label class="form-label">Language</label>
+                                            <select class="form-select"><option>English</option><option>Spanish</option><option>French</option></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Account Management -->
+                            <div id="set-account" class="settings-content d-none">
+                                <div class="card-custom border-danger">
+                                    <div class="card-header-custom text-danger">Danger Zone</div>
+                                    <div class="card-body">
+                                        <h5 class="fw-bold">Delete Account</h5>
+                                        <p class="text-muted">Once you delete your account, there is no going back. Please be certain.</p>
+                                        <button class="btn btn-outline-danger btn-sm" onclick="alert('Account deactivated.')">Deactivate Account</button>
+                                        <button class="btn btn-danger btn-sm ms-2" onclick="alert('Account deleted.')">Delete Account</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Placeholders for other tabs -->
+                            <div id="set-account" class="settings-content d-none"><h5>Account Settings Content</h5><p>Change password and update email.</p></div>
+                            <div id="set-notifications" class="settings-content d-none"><h5>Notification Settings</h5><p>Configure email and alert preferences.</p></div>
+                            <div id="set-preferences" class="settings-content d-none"><h5>Dashboard Preferences</h5><p>Set default view and measurement units.</p></div>
+                            <div id="set-security" class="settings-content d-none"><h5>Privacy & Security</h5><p>Manage 2FA and login sessions.</p></div>
+                            <div id="set-data" class="settings-content d-none"><h5>Data & Reports</h5><p>Download personal reports and export data.</p></div>
+                            <div id="set-support" class="settings-content d-none"><h5>Support</h5><p>Contact help center.</p></div>
+
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </section>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ==========================================
+        // STATE & DATA SIMULATION
+        // ==========================================
+        const appState = {
+            currentUser: null,
+            currentView: 'home',
+            dashboardSubView: 'overview',
+            data: [],
+            model: {
+                intercept: 5,
+                coefficients: { traffic: 0.4, weather: 0.2, distance: 0.6, load: 0.05, time: 0.1 },
+                r2: 0.89,
+                mae: 2.4,
+                rmse: 3.1
+            }
+        };
+
+        // Initialize Mock Data
+        function initData() {
+            for(let i=0; i<200; i++) {
+                const dist = Math.random() * 50 + 5;
+                const traffic = Math.random() * 100;
+                const weather = Math.random() * 100;
+                const load = Math.random() * 50;
+                const time = Math.random() * 24;
+                // Simulate a relationship
+                const predicted = 5 + (0.6*dist) + (0.4*traffic/10) + (0.2*weather/10) + (0.05*load) + (0.1*time);
+                const actual = predicted + (Math.random() * 10 - 5); // Noise
+                
+                appState.data.push({
+                    id: i,
+                    distance: parseFloat(dist.toFixed(1)),
+                    traffic: Math.floor(traffic),
+                    weather: Math.floor(weather),
+                    load: parseFloat(load.toFixed(1)),
+                    time: Math.floor(time),
+                    predicted: parseFloat(predicted.toFixed(1)),
+                    actual: parseFloat(actual.toFixed(1))
+                });
+            }
+        }
+        initData();
+
+        // ==========================================
+        // ROUTING & AUTH
+        // ==========================================
+        function router(viewId, subAction = null) {
+            // Hide all main views
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            
+            // Toggle Nav Items
+            document.querySelectorAll('.auth-links, .dashboard-links').forEach(el => el.classList.add('d-none'));
+
+            if (viewId === 'home') {
+                document.getElementById('view-home').classList.add('active');
+                document.querySelector('.auth-links').classList.remove('d-none');
+            } else if (viewId === 'dashboard') {
+                if (!appState.currentUser) {
+                    router('auth', 'login'); // Protect route
+                    return;
+                }
+                document.getElementById('view-dashboard').classList.add('active');
+                document.querySelector('.dashboard-links').classList.remove('d-none');
+                dashRouter('overview'); // Default dashboard view
+                document.getElementById('nav-username').innerText = appState.currentUser.name;
+            } else if (viewId === 'auth') {
+                document.getElementById('view-auth').classList.add('active');
+                document.querySelector('.auth-links').classList.remove('d-none');
+                // Handle subaction (login vs register tab)
+                if (subAction === 'register') {
+                    new bootstrap.Tab(document.querySelector('#tab-register')).show();
+                } else {
+                    new bootstrap.Tab(document.querySelector('#tab-login')).show();
+                }
+            } else {
+                // Public Pages
+                document.getElementById(`view-${viewId}`).classList.add('active');
+                document.querySelector('.auth-links').classList.remove('d-none');
+            }
+            window.scrollTo(0,0);
+        }
+
+        function dashRouter(subViewId) {
+            // Hide sub-views
+            document.querySelectorAll('.dash-view').forEach(el => el.classList.add('d-none'));
+            // Show target
+            document.getElementById(`dash-${subViewId}`).classList.remove('d-none');
+            
+            // Update Sidebar
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            const link = document.querySelector(`.nav-item[onclick="dashRouter('${subViewId}')"]`);
+            if(link) link.classList.add('active');
+
+            // Init View Logic
+            if(subViewId === 'overview') renderOverview();
+            if(subViewId === 'predictions') {
+                updatePrediction(); // Initial calc
+                renderPredictionChart();
+            }
+            if(subViewId === 'analytics') renderAnalytics();
+            if(subViewId === 'reports') renderReports();
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            appState.currentUser = { name: 'Admin User', email: 'admin@example.com' };
+            router('dashboard');
+        }
+
+        function handleRegister(e) {
+            e.preventDefault();
+            alert("Registration Successful! Redirecting to Login...");
+            setTimeout(() => router('auth', 'login'), 1000);
+        }
+
+        function logout() {
+            appState.currentUser = null;
+            router('home');
+        }
+
+        // ==========================================
+        // INTERACTIVE PREDICTION MODULE
+        // ==========================================
+        function updatePrediction() {
+            // Get Inputs
+            const traffic = parseFloat(document.getElementById('range-traffic').value);
+            const weather = parseFloat(document.getElementById('range-weather').value);
+            const dist = parseFloat(document.getElementById('range-dist').value);
+            const load = parseFloat(document.getElementById('range-load').value);
+            const time = parseFloat(document.getElementById('range-time').value);
+
+            // Update Labels
+            document.getElementById('val-traffic').innerText = traffic;
+            document.getElementById('val-weather').innerText = weather;
+            document.getElementById('val-dist').innerText = dist;
+            document.getElementById('val-load').innerText = load;
+            document.getElementById('val-time').innerText = time;
+
+            // Prediction Calculation: y = b0 + b1x1 + ...
+            const pred = appState.model.intercept + 
+                        (appState.model.coefficients.traffic * (traffic/10)) + 
+                        (appState.model.coefficients.weather * (weather/10)) + 
+                        (appState.model.coefficients.distance * dist) + 
+                        (appState.model.coefficients.load * load) + 
+                        (appState.model.coefficients.time * time);
+
+            document.getElementById('pred-result').innerText = pred.toFixed(1) + " min";
+
+            // Update Chart Point dynamically
+            updateChartPoint(dist, pred);
+        }
+
+        function renderPredictionChart() {
+            const xData = appState.data.map(d => d.distance);
+            const yData = appState.data.map(d => d.actual);
+            
+            // Calculate Regression Line (Simplified OLS simulation)
+            const minX = Math.min(...xData);
+            const maxX = Math.max(...xData);
+            const lineX = [minX, maxX];
+            const slope = appState.model.coefficients.distance;
+            const lineY = [appState.model.intercept + slope*minX, appState.model.intercept + slope*maxX];
+
+            // Confidence Band (Visual)
+            const rmse = appState.model.rmse;
+            const yUpper = lineY.map(y => y + 1.96*rmse);
+            const yLower = lineY.map(y => y - 1.96*rmse);
+
+            // Colors using the new Theme Variables (Rose for line, Indigo for accent)
+            const trace1 = { x: xData, y: yData, mode: 'markers', name: 'Actual Data', marker: {color: '#e5e7eb', size: 5} };
+            const trace2 = { x: lineX, y: lineY, mode: 'lines', name: 'Regression Trend', line: {color: '#ec4899', width: 4} }; // Rose Line
+            const trace3 = { x: lineX, y: yUpper, mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(236, 72, 153, 0.2)', name: '95% CI' };
+            const trace4 = { x: lineX, y: yLower, mode: 'lines', line: {width:0}, showlegend: false };
+
+            const currentDist = parseFloat(document.getElementById('range-dist').value);
+            const currentPred = parseFloat(document.getElementById('pred-result').innerText);
+            
+            const trace5 = { x: [currentDist], y: [currentPred], mode: 'markers', name: 'Current Prediction', marker: {color: '#4f46e5', size: 12, symbol: 'diamond'} }; // Indigo Point
+
+            const layout = {
+                margin: {t: 20, b: 40, l: 40, r: 20},
+                xaxis: {title: 'Distance (km)'},
+                yaxis: {title: 'Delivery Time (min)'},
+                hovermode: 'closest'
+            };
+
+            Plotly.newPlot('predictionChart', [trace1, trace3, trace4, trace2, trace5], layout, {displayModeBar: false, responsive: true});
+        }
+
+        function updateChartPoint(dist, pred) {
+            Plotly.restyle('predictionChart', {x: [[dist]], y: [[pred]]}, [4]);
+        }
+
+        // ==========================================
+        // ANALYTICS & CHARTS
+        // ==========================================
+        function renderOverview() {
+            // Delivery Performance Line Chart
+            const trace1 = { x: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], y: [120, 135, 125, 145, 160, 110, 105], type: 'scatter', mode: 'lines+markers', name: 'Deliveries', line: {color: '#4f46e5'} }; // Indigo Line
+            Plotly.newPlot('overviewChart', [trace1], {margin: {t:20, b:40, l:40, r:20}, yaxis: {title: 'Count'}}, {displayModeBar: false, responsive: true});
+            
+            // Status Donut Chart (Rose accent)
+            const data2 = [{ values: [11700, 600, 150], labels: ['On Time', 'Delayed', 'Cancelled'], type: 'pie', hole: 0.4, marker: {colors: ['#10b981', '#f59e0b', '#ec4899']} }];
+            Plotly.newPlot('statusChart', data2, {margin: {t:0, b:0, l:0, r:0}, showlegend: false}, {displayModeBar: false, responsive: true});
+        }
+
+        function renderAnalytics() {
+            // Residual Plot
+            const residuals = appState.data.map(d => d.actual - d.predicted);
+            const preds = appState.data.map(d => d.predicted);
+            const trace = { x: preds, y: residuals, mode: 'markers', name: 'Residuals', marker: {color: '#ec4899'} }; // Rose dots
+            const zeroLine = { x: [Math.min(...preds), Math.max(...preds)], y: [0,0], mode: 'lines', line: {color: 'black', dash: 'dash'} };
+            Plotly.newPlot('residualChart', [trace, zeroLine], {xaxis: {title: 'Predicted'}, yaxis: {title: 'Residual'}}, {displayModeBar: false, responsive: true});
+
+            // Feature Importance (Bar) - Indigo bars
+            const impData = [{x: ['Distance', 'Traffic', 'Load', 'Weather', 'Time'], y: [0.6, 0.4, 0.05, 0.2, 0.1], type: 'bar', marker: {color: '#4f46e5'}}];
+            Plotly.newPlot('importanceChart', impData, {margin: {t:20, b:40, l:60, r:20}}, {displayModeBar: false, responsive: true});
+        }
+
+        function renderReports() {
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+            appState.data.slice(0, 10).forEach(d => {
+                tbody.innerHTML += `<tr><td>#${d.id}</td><td>${d.distance}</td><td>${d.traffic}</td><td>${d.weather}</td><td>${d.actual}</td><td>${d.predicted.toFixed(1)}</td></tr>`;
+            });
+        }
+
+        // ==========================================
+        // SETTINGS UI
+        // ==========================================
+        function setSettingsTab(tabId) {
+            document.querySelectorAll('.settings-content').forEach(el => el.classList.add('d-none'));
+            document.getElementById(`set-${tabId}`).classList.remove('d-none');
+            
+            document.querySelectorAll('.settings-link').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const isDark = document.getElementById('darkModeToggle').checked;
+            if(isDark) {
+                body.style.backgroundColor = '#0f172a';
+                body.style.color = '#e2e8f0';
+            } else {
+                body.style.backgroundColor = '#f3f4f6';
+                body.style.color = '#1f2937';
+            }
+        }
+
+        function toggleSidebar() {
+            document.getElementById('dashboardSidebar').classList.toggle('show');
+        }
+
+        // Initialize View on Load
+        document.addEventListener('DOMContentLoaded', () => {
+            const user = localStorage.getItem('user');
+            if(user) {
+                appState.currentUser = JSON.parse(user);
+                router('dashboard');
+            } else {
+                router('home');
+            }
+        });
+    </script>
+</body>
+</html>
